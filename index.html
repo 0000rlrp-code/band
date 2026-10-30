@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#2B3A55">
-<title>밴드 합주</title>
+<title>HanDler 합주</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
@@ -52,8 +52,23 @@
   .pill.O { background:var(--ob); color:var(--o); }
   .pill.T { background:var(--tb); color:var(--t); }
   .pill.X { background:var(--xb); color:var(--x); }
-  .rooms { margin-top:10px; padding-top:10px; border-top:1px dashed var(--line); font-size:12.5px; color:var(--teal); line-height:1.6; }
-  .rooms b { font-weight:500; color:var(--mute); margin-right:4px; }
+  /* 빈방 표: 시간대마다 한 줄, 왼쪽 시간 · 오른쪽 드림/별나무 방 칩 */
+  .rooms { margin-top:10px; padding-top:10px; border-top:1px dashed var(--line); }
+  .rh { display:flex; justify-content:space-between; align-items:baseline; font-size:13.5px; font-weight:700; margin-bottom:4px; }
+  .rs { display:grid; grid-template-columns:58px 1fr; gap:8px; padding:8px 0; border-top:1px solid #eef1f5; }
+  .rh + .rs, details .rs:first-of-type { border-top:0; }
+  .rs.best { background:var(--ob); border-radius:10px; padding:8px; margin:2px -8px; border-top:0; }
+  .rs.best + .rs { border-top:0; }
+  .rt { font-size:14px; font-weight:700; color:var(--navy); line-height:1.35; }
+  .rt em { display:block; font-style:normal; font-size:11px; color:var(--o); }
+  .rr > div { display:grid; grid-template-columns:38px 1fr; align-items:start; margin:2px 0; }
+  .rk { font-size:11.5px; color:var(--mute); padding-top:3px; }
+  .rcs { display:flex; flex-wrap:wrap; gap:4px; }
+  .rc { font-size:12.5px; padding:2px 8px; border-radius:6px; background:#e7f0f7; color:#1d4f7a; white-space:nowrap; }
+  .rc.s { background:#f1ebfa; color:#5b3b8c; }
+  .no { font-size:12px; color:#aab0ba; padding-top:2px; }
+  .rooms details summary { font-size:12.5px; color:var(--mute); cursor:pointer; padding:8px 0 2px; }
+  .rnote { font-size:12px; color:var(--mute); margin-top:4px; }
   .empty, .loading, .error { text-align:center; color:var(--mute); padding:32px 8px; line-height:1.6; }
   .error { color:var(--x); }
   .skel { height:150px; border-radius:16px; background:linear-gradient(90deg,#eceff4 25%,#f6f7fa 50%,#eceff4 75%);
@@ -136,7 +151,7 @@
 <div class="wrap">
   <header>
     <div>
-      <h1>밴드 합주</h1>
+      <h1>HanDler</h1>
       <p class="sub" id="sub">되는 날은 O, 늦게 오거나 일찍 가면 △, 안 되면 X. 되는 시간도 30분 단위로 고를 수 있고, 시간을 고르면 자동으로 O가 돼요.</p>
     </div>
     <button class="refresh" id="refresh">새로고침</button>
@@ -328,9 +343,123 @@ document.addEventListener("click", function (ev) {
 });
 
 // 시간 칸이 비어 있으면 멤버 시간이 겹친 추천 시간, 그것도 없으면 '시간 미정'
+function parseRange(str) {
+  var m = String(str || "").match(/(\d{1,2})(?::(\d{2}))?\s*[~\-]\s*(\d{1,2})(?::(\d{2}))?/);
+  if (!m) return null;
+  var s = Number(m[1]) + (Number(m[2] || 0) > 0 ? 1 : 0); // 시작은 올림
+  var e = Number(m[3]);                                    // 끝은 내림
+  return {s: s, e: e};
+}
+
+// 드림·별나무 빈방 글을 시간대별 목록 [{s, e, rooms}]로 바꾼다(같은 시간대는 드림 다음 별나무 순으로 합침)
+function roomSlots(d) {
+  var slots = [];
+  [siteSlots(d, d.dream), siteSlots(d, d.startree)].forEach(function (list) {
+    list.forEach(function (g) {
+      var same = slots.filter(function (x) { return x.s === g.s && x.e === g.e; })[0];
+      if (!same) slots.push({s: g.s, e: g.e, rooms: g.rooms.slice()});
+      else g.rooms.forEach(function (r) { if (same.rooms.indexOf(r) === -1) same.rooms.push(r); });
+    });
+  });
+  slots.sort(function (a, b) { return a.s - b.s || a.e - b.e; });
+  return slots;
+}
+
+// 한 곳(드림 또는 별나무)의 빈방 글 -> [{s, e, rooms}]. '빈방 없음'·'확인 실패'·빈칸이면 []
+function siteSlots(d, txt) {
+  txt = String(txt || "").trim();
+  if (!txt || txt === "빈방 없음" || txt.indexOf("확인 실패") === 0) return [];
+  function splitRooms(t) {
+    return String(t || "").split(",").map(function (x) { return x.trim(); }).filter(Boolean);
+  }
+  var parts = txt.split(" · ");
+  if (/^\d{1,2}~\d{1,2}시\s/.test(parts[0])) {
+    return parts.map(function (p) {
+      var m = p.trim().match(/^(\d{1,2})~(\d{1,2})시\s+(.+)$/);
+      return m ? {s: Number(m[1]), e: Number(m[2]), rooms: splitRooms(m[3])} : null;
+    }).filter(Boolean);
+  }
+  var w = parseRange(d.time || d.suggest);
+  return w && w.e > w.s ? [{s: w.s, e: w.e, rooms: splitRooms(txt)}] : [];
+}
+
+// 빈방 표. 겹치는 시간 안의 시간대를 먼저 보이고, 나머지는 접어 둔다. 추천 시간대는 초록으로.
+function roomTable(d, sg) {
+  var dr = siteSlots(d, d.dream), st = siteSlots(d, d.startree);
+  var keys = roomSlots(d).map(function (g) { return {s: g.s, e: g.e}; });
+  var ov = parseRange(d.overlap);
+  var inOv = function (g) { return ov && ov.e - ov.s >= 2 && g.s >= ov.s && g.e <= ov.e; };
+  function find(list, g) {
+    var hit = list.filter(function (x) { return x.s === g.s && x.e === g.e; })[0];
+    return hit ? hit.rooms : [];
+  }
+  function chips(rooms, c) {
+    return rooms.length ? '<div class="rcs">' + rooms.map(function (r) { return '<span class="rc ' + c + '">' + esc(r) + "</span>"; }).join("") + "</div>"
+                        : '<span class="no">없음</span>';
+  }
+  function row(g) {
+    var best = sg && sg.s === g.s && sg.e === g.e;
+    return '<div class="rs' + (best ? " best" : "") + '"><div class="rt">' + g.s + "~" + g.e + "시" + (best ? "<em>추천</em>" : "") + "</div>" +
+      '<div class="rr"><div><span class="rk">드림</span>' + chips(find(dr, g), "d") + "</div>" +
+      '<div><span class="rk">별나무</span>' + chips(find(st, g), "s") + "</div></div></div>";
+  }
+  var main = ov && ov.e - ov.s >= 2 ? keys.filter(inOv) : keys;
+  if (main.length > 4) { // 너무 길면 선호 시간대(16~19시)에 가까운 4개만 펼친다
+    var gap = function (g) { return Math.max(0, PREF_START - g.s) + Math.max(0, g.e - PREF_END); };
+    main = main.slice().sort(function (a, b) { return gap(a) - gap(b) || a.s - b.s; }).slice(0, 4)
+               .sort(function (a, b) { return a.s - b.s; });
+  }
+  var rest = keys.filter(function (g) { return main.indexOf(g) === -1; });
+  // 한 곳 전체가 '빈방 없음'이나 '확인 실패'면 표 아래에 한 줄로 알린다
+  var notes = [["드림", d.dream], ["별나무", d.startree]].filter(function (x) {
+    var t = String(x[1] || "").trim();
+    return t && (t === "빈방 없음" || t.indexOf("확인 실패") === 0);
+  }).map(function (x) { return x[0] + ": " + String(x[1]).trim(); });
+  return '<div class="rooms"><div class="rh"><span>빈방 (2시간 기준)</span>' +
+    (d.checked ? '<span class="checked">' + esc(shortTime(d.checked)) + " 기준</span>" : "") + "</div>" +
+    (main.length ? main.map(row).join("") : '<div class="rnote">' + (ov ? "겹치는 시간 안에는 빈방이 없어요." : "빈방이 없어요.") + "</div>") +
+    (rest.length ? "<details><summary>" + (main.length ? "다른 시간 " : "겹치는 시간 밖 ") + rest.length + "개 더 보기</summary>" +
+      rest.map(row).join("") + "</details>" : "") +
+    (notes.length ? '<div class="rnote">' + esc(notes.join(" · ")) + "</div>" : "") + "</div>";
+}
+
+// 멤버 시간이 겹치고 빈방도 있는 가장 이른 시간대. 시간이 정해졌으면 null, 확인 전이면 null, 맞는 곳이 없으면 false
+function smartSuggest(d) {
+  if (d.time) return null;
+  var ov = parseRange(d.overlap);
+  if (!ov || ov.e - ov.s < 2) return null;
+  var checked = String(d.dream || "").trim() !== "" || String(d.startree || "").trim() !== "";
+  if (!checked) return null;
+  // 빈방이 있는 구간 중 팀 선호 시간대(16~19시)에 가장 가까운 것. 같으면 이른 시간.
+  var slots = roomSlots(d), best = null, bestGap = 99;
+  for (var i = 0; i < slots.length; i++) {
+    var g = slots[i];
+    if (g.s >= ov.s && g.e <= ov.e && g.rooms.length) {
+      var gap = Math.max(0, PREF_START - g.s) + Math.max(0, g.e - PREF_END);
+      if (gap < bestGap || (gap === bestGap && g.s < best.s)) { best = g; bestGap = gap; }
+    }
+  }
+  return best ? {s: best.s, e: best.e, rooms: best.rooms} : false;
+}
+var PREF_START = 16, PREF_END = 19; // 팀이 선호하는 합주 시간대
+
+// 시트에서 날짜 객체 글('Fri Oct 30 2026 18:08:00 GMT+0900 …')로 올 때도 '10/30 18:08'로 줄인다
+function shortTime(v) {
+  var s = String(v || "");
+  if (/^\d{1,2}\/\d{1,2} \d{1,2}:\d{2}$/.test(s)) return s;
+  var t = new Date(s.replace(/\s*\(.*\)$/, ""));
+  return isNaN(t) ? s : (t.getMonth() + 1) + "/" + t.getDate() + " " + pad2(t.getHours()) + ":" + pad2(t.getMinutes());
+}
+
+function hourRange(g) { return pad2(g.s) + ":00~" + pad2(g.e) + ":00"; }
+
+// 시간 칸이 비어 있으면 겹치는 시간 중 빈방이 있는 추천 시간, 아직 모르면 겹침 추천, 그것도 없으면 '시간 미정'
 function timeLabel(d) {
   if (d.time) return d.time;
-  return d.suggest ? "추천 " + d.suggest : "시간 미정";
+  var g = smartSuggest(d);
+  if (g) return "추천 " + hourRange(g);
+  if (g === false) return "시간 미정";
+  return d.suggest ? "추천 " + d.suggest + " (빈방 확인 전)" : "시간 미정";
 }
 
 function bookingText(d) {
@@ -389,16 +518,18 @@ function render() {
     }
     var ov = "";
     if (d.overlap) {
-      ov = '<div class="ov' + (d.suggest ? "" : " none") + '">겹치는 시간 ' + esc(d.overlap) +
-        (d.suggest ? " · 추천 " + esc(d.suggest) : " · 2시간이 안 돼요") + "</div>";
+      var sg = smartSuggest(d);
+      if (sg) {
+        ov = '<div class="ov">겹치는 시간 ' + esc(d.overlap) + " · 추천 " + esc(hourRange(sg)) + "</div>";
+      } else if (sg === false) {
+        ov = '<div class="ov none">겹치는 시간 ' + esc(d.overlap) + " · 이 시간대엔 빈방이 없어요</div>";
+      } else {
+        ov = '<div class="ov' + (d.suggest ? "" : " none") + '">겹치는 시간 ' + esc(d.overlap) +
+          (d.suggest ? " · 추천 " + esc(d.suggest) : " · 2시간이 안 돼요") + "</div>";
+      }
     }
     var rooms = "";
-    if (d.status !== "예약 완료" && (d.dream || d.startree)) {
-      rooms = '<div class="rooms">' +
-        (d.dream ? "<div><b>드림 빈방</b>" + esc(d.dream) + "</div>" : "") +
-        (d.startree ? "<div><b>별나무 빈방</b>" + esc(d.startree) + "</div>" : "") +
-        (d.checked ? '<div class="checked">' + esc(d.checked) + " 기준</div>" : "") + "</div>";
-    }
+    if (d.status !== "예약 완료" && (d.dream || d.startree)) rooms = roomTable(d, smartSuggest(d));
     return '<div class="box"><div class="top"><div class="date">' + esc(d.label) + badge + '</div><div class="time">' +
       esc(timeLabel(d)) + "</div></div>" +
       '<div class="meta">' + (d.due ? "응답 마감 " + esc(d.due) + " · " : "") + "가능 " + ok + "/" + names.length + "명</div>" +
@@ -639,6 +770,18 @@ function bookInit(d) {
     e = Math.max(s + 1, Math.min(24, Number(m[3]) + (Number(m[4] || 0) > 0 ? 1 : 0)));
   }
   var f = {site: "dream", room: BOOK_ROOMS.dream[0], start: s, end: e, amount: 0};
+  var sg = smartSuggest(d);
+  if (sg) {
+    f.start = Math.max(9, Math.min(23, sg.s));
+    f.end = Math.max(f.start + 1, Math.min(24, sg.e));
+    var r0 = sg.rooms[0] || "";
+    if (/룸$/.test(r0)) {
+      var rn = r0.replace(/룸$/, "").trim();
+      if (BOOK_ROOMS.startree.indexOf(rn) !== -1) { f.site = "startree"; f.room = rn; }
+    } else if (BOOK_ROOMS.dream.indexOf(r0) !== -1) {
+      f.room = r0;
+    }
+  }
   f.amount = bookPrice(f);
   return f;
 }
