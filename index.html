@@ -107,6 +107,18 @@
   .ov.none { color:var(--x); }
   .pm { display:flex; justify-content:space-between; padding:7px 0; font-size:14px; border-bottom:1px solid var(--line); }
   .pm:last-child { border-bottom:0; }
+  .bkbtn { margin-top:12px; width:100%; border:1.5px dashed var(--navy); background:#fff; color:var(--navy); border-radius:12px;
+           font:inherit; font-size:14px; min-height:40px; cursor:pointer; }
+  .bkform { margin-top:10px; padding:12px; border-radius:12px; background:var(--bg); }
+  .bkform .r { display:flex; align-items:center; gap:6px; margin-bottom:8px; }
+  .bkform .lb { width:52px; flex:none; font-size:13px; color:var(--mute); }
+  .bkform select, .bkform input { flex:1; min-width:0; border:1.5px solid var(--line); background:#fff; border-radius:10px;
+                                  padding:8px; font:inherit; font-size:16px; min-height:40px; color:var(--ink); }
+  .bkform input { text-align:right; font-weight:700; }
+  .bkform .sep { flex:none; color:var(--mute); }
+  .bksave { width:100%; border:0; border-radius:12px; background:var(--navy); color:#fff; font:inherit; font-size:16px;
+            font-weight:700; min-height:44px; cursor:pointer; margin-top:4px; }
+  .bksave:disabled { opacity:.5; }
   #toast { position:fixed; left:50%; bottom:calc(20px + env(safe-area-inset-bottom)); transform:translateX(-50%); background:var(--navy);
            color:#fff; padding:10px 18px; border-radius:999px; font-size:14px; opacity:0; transition:opacity .2s; pointer-events:none; }
   #toast.show { opacity:1; }
@@ -326,7 +338,7 @@ function render() {
       '<div class="meta">' + (d.due ? "응답 마감 " + esc(d.due) + " · " : "") + "가능 " + ok + "/" + names.length + "명</div>" +
       (d.status === "예약 완료" ? '<div class="bk">' + esc(bookingText(d)) + "</div>" : "") +
       '<div class="btns">' + btn("O", "O", "가능") + btn("△", "T", "늦게·일찍") + btn("X", "X", "불가") + "</div>" +
-      timeRow + '<div class="others">' + others + "</div>" + ov + rooms + "</div>";
+      timeRow + '<div class="others">' + others + "</div>" + ov + rooms + bookUi(d) + "</div>";
   }).join("");
 }
 
@@ -530,6 +542,133 @@ function undoDues() {
     })
     .catch(function (e) { toast(e.message || "되돌리지 못했어요"); });
 }
+
+// ---------- 예약 완료 처리 (관리자만) ----------
+var bookingOpenRow = 0, bookForm = null, bookSaving = false;
+var BOOK_SITES = [{v: "dream", n: "드림합주실 신촌"}, {v: "startree", n: "별나무합주실"}];
+var BOOK_ROOMS = {
+  dream: ["본점 V", "본점 A", "본점 B", "본점 C", "연대점 R", "연대점 Q", "연대점 F"],
+  startree: ["V", "R", "Y", "T", "J"]
+};
+var BOOK_PRICE = {
+  dream: {"본점 V": 24000, "본점 A": 18000, "본점 B": 17000, "본점 C": 15000, "연대점 R": 24000, "연대점 Q": 22000, "연대점 F": 16000},
+  startree: {V: 21000, R: 19000, Y: 18000, T: 14000, J: 14000}
+};
+
+function pad2(n) { return ("0" + n).slice(-2); }
+function bookPrice(f) {
+  var p = (BOOK_PRICE[f.site] || {})[f.room] || 0;
+  return f.end > f.start ? p * (f.end - f.start) : 0;
+}
+function bookAmountText(n) { return n ? Number(n).toLocaleString("ko-KR") : ""; }
+
+// 추천 시간 > 시간 칸 > 기본 14~16시 순으로 시작·끝 시간을 정한다
+function bookInit(d) {
+  var s = 14, e = 16;
+  var m = String(d.suggest || "").match(/(\d{1,2})(?::(\d{2}))?\s*[~\-]\s*(\d{1,2})(?::(\d{2}))?/) ||
+          String(d.time || "").match(/(\d{1,2})(?::(\d{2}))?\s*[~\-]\s*(\d{1,2})(?::(\d{2}))?/);
+  if (m) {
+    s = Math.max(9, Math.min(23, Number(m[1])));
+    e = Math.max(s + 1, Math.min(24, Number(m[3]) + (Number(m[4] || 0) > 0 ? 1 : 0)));
+  }
+  var f = {site: "dream", room: BOOK_ROOMS.dream[0], start: s, end: e, amount: 0};
+  f.amount = bookPrice(f);
+  return f;
+}
+
+function bookFormInner() {
+  var f = bookForm;
+  function opt(v, label, cur) {
+    return '<option value="' + esc(v) + '"' + (String(v) === String(cur) ? " selected" : "") + ">" + esc(label) + "</option>";
+  }
+  function hours(cur) {
+    var o = [];
+    for (var h = 9; h <= 24; h++) o.push(opt(h, pad2(h) + ":00", cur));
+    return o.join("");
+  }
+  return '<div class="r"><span class="lb">합주실</span><select data-bk="site">' +
+      BOOK_SITES.map(function (s) { return opt(s.v, s.n, f.site); }).join("") + "</select></div>" +
+    '<div class="r"><span class="lb">방</span><select data-bk="room">' +
+      BOOK_ROOMS[f.site].map(function (r) { return opt(r, f.site === "startree" ? r + "룸" : r, f.room); }).join("") + "</select></div>" +
+    '<div class="r"><span class="lb">시간</span><select data-bk="start">' + hours(f.start) + '</select><span class="sep">~</span>' +
+      '<select data-bk="end">' + hours(f.end) + "</select></div>" +
+    '<div class="r"><span class="lb">금액</span><input data-bk="amount" inputmode="numeric" placeholder="0" autocomplete="off" value="' +
+      esc(bookAmountText(f.amount)) + '"></div>' +
+    '<button class="bksave" data-booksave="1"' + (bookSaving ? " disabled" : "") + ">저장</button>";
+}
+
+// 관리자에게만, 아직 예약 완료가 아닌 날짜 카드 맨 아래에 붙는다
+function bookUi(d) {
+  if (!ADMIN || d.status === "예약 완료") return "";
+  var open = bookingOpenRow === d.row && bookForm;
+  return '<button class="bkbtn" data-book="' + d.row + '">' + (open ? "닫기" : "예약 완료 처리") + "</button>" +
+    (open ? '<div class="bkform" data-row="' + d.row + '">' + bookFormInner() + "</div>" : "");
+}
+
+function saveBooking() {
+  if (bookSaving || !bookForm || !DATA || !bookingOpenRow) return;
+  var f = bookForm, row = bookingOpenRow, date = "";
+  DATA.dates.forEach(function (x) { if (x.row === row) date = x.date; });
+  if (!date) { toast("날짜를 찾지 못했어요. 새로고침해 주세요"); return; }
+  if (!(f.end > f.start)) { toast("끝 시간이 시작보다 늦어야 해요"); return; }
+  bookSaving = true;
+  [].forEach.call(document.querySelectorAll(".bksave"), function (b) { b.disabled = true; });
+  var body = {action: "book", a: ADMIN, row: row, date: date, site: f.site, room: f.room, start: f.start, end: f.end, amount: f.amount};
+  fetch(API, {method: "POST", body: JSON.stringify(body)})
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (d.error) throw new Error(d.error);
+      bookingOpenRow = 0;
+      bookForm = null;
+      DATA = d;
+      render();
+      renderInfo();
+      toast(d.already ? "이미 기록된 예약이에요" : "예약 완료로 표시했어요");
+    })
+    .catch(function (e) { toast(e.message || "저장하지 못했어요"); })
+    .then(function () {
+      bookSaving = false;
+      [].forEach.call(document.querySelectorAll(".bksave"), function (b) { b.disabled = false; });
+    });
+}
+
+document.addEventListener("change", function (ev) {
+  var sel = ev.target.closest(".bkform select");
+  if (!sel || !bookForm) return;
+  var k = sel.getAttribute("data-bk");
+  if (k === "site") { bookForm.site = sel.value; bookForm.room = BOOK_ROOMS[sel.value][0]; }
+  else if (k === "room") bookForm.room = sel.value;
+  else bookForm[k] = Number(sel.value);
+  bookForm.amount = bookPrice(bookForm);
+  var form = sel.closest(".bkform");
+  if (k === "site") { form.innerHTML = bookFormInner(); return; }
+  form.querySelector('[data-bk="amount"]').value = bookAmountText(bookForm.amount);
+});
+
+document.addEventListener("input", function (ev) {
+  var inp = ev.target.closest(".bkform input");
+  if (!inp || !bookForm) return;
+  bookForm.amount = Number(String(inp.value).replace(/[^0-9]/g, "")) || 0;
+  inp.value = bookAmountText(bookForm.amount);
+});
+
+document.addEventListener("click", function (ev) {
+  var tg = ev.target.closest("[data-book]");
+  if (tg && ADMIN && DATA) {
+    var row = Number(tg.getAttribute("data-book"));
+    if (bookingOpenRow === row) { bookingOpenRow = 0; bookForm = null; }
+    else {
+      var cur = null;
+      DATA.dates.forEach(function (x) { if (x.row === row) cur = x; });
+      if (!cur) return;
+      bookingOpenRow = row;
+      bookForm = bookInit(cur);
+    }
+    render();
+    return;
+  }
+  if (ev.target.closest("[data-booksave]")) saveBooking();
+});
 
 document.getElementById("amount").addEventListener("input", function () { setAmount(amountValue()); });
 window.addEventListener("hashchange", function () { if (/admin=/.test(location.hash)) location.reload(); });
