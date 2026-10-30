@@ -121,7 +121,7 @@
     </div>
     <button class="refresh" id="refresh">새로고침</button>
   </header>
-  <div class="tabs show" id="tabs"><button class="tab on" data-tab="vote">날짜 체크</button><button class="tab" data-tab="dues">회비</button><button class="tab" data-tab="info">다음 합주</button></div>
+  <div class="tabs show" id="tabs"><button class="tab on" data-tab="vote">날짜 체크</button><button class="tab" data-tab="dues">회비</button><button class="tab" data-tab="info">합주</button></div>
   <div id="voteView">
     <div id="nextTop"></div>
     <div class="box who"><div class="label">나는 (한 번 고르면 다음에도 기억해요)</div><div id="members" class="chips"></div></div>
@@ -250,6 +250,12 @@ document.addEventListener("click", function (ev) {
   saveTime(Number(box.getAttribute("data-row")), box.getAttribute("data-date"), "", "");
 });
 
+// 시간 칸이 비어 있으면 멤버 시간이 겹친 추천 시간, 그것도 없으면 '시간 미정'
+function timeLabel(d) {
+  if (d.time) return d.time;
+  return d.suggest ? "추천 " + d.suggest : "시간 미정";
+}
+
 function bookingText(d) {
   var b = d.booking;
   if (!b) return "예약 완료";
@@ -257,7 +263,7 @@ function bookingText(d) {
 }
 
 function nextCard(d) {
-  return '<div class="box next"><div class="k">다음 합주 (예약 완료)</div><div class="v">' + esc(d.label) + " " + esc(d.time) + "</div>" +
+  return '<div class="box next"><div class="k">다음 합주 (예약 완료)</div><div class="v">' + esc(d.label) + " " + esc(timeLabel(d)) + "</div>" +
     (d.booking ? '<div class="w">' + esc([d.booking.place, d.booking.room].filter(Boolean).join(" ")) + "</div>" : "") + "</div>";
 }
 
@@ -276,7 +282,13 @@ function render() {
     list.innerHTML = '<div class="box empty">아직 후보 날짜가 없어요.<br>후보가 올라오면 여기에 나타나요.</div>';
     return;
   }
-  list.innerHTML = (me ? "" : '<div class="box empty">위에서 먼저 이름을 골라 주세요.</div>') + DATA.dates.map(function (d) {
+  // 드림·별나무 둘 다 '빈방 없음'인 날은 예약할 수 없으니 숨긴다(예약 완료된 날은 그대로)
+  var full = function (d) { return d.status !== "예약 완료" && d.dream === "빈방 없음" && d.startree === "빈방 없음"; };
+  var shown = DATA.dates.filter(function (d) { return !full(d); });
+  var hidden = DATA.dates.length - shown.length;
+  list.innerHTML = (me ? "" : '<div class="box empty">위에서 먼저 이름을 골라 주세요.</div>') +
+    (hidden ? '<div class="checked" style="margin:0 0 10px 4px">드림·별나무 모두 빈방이 없는 날 ' + hidden + "개는 숨겼어요.</div>" : "") +
+    shown.map(function (d) {
     var mine = me ? (d.answers[me] || "") : "";
     var ok = names.filter(function (n) { return d.answers[n] === "O" || d.answers[n] === "△"; }).length;
     var badge = d.status === "예약 완료" ? '<span class="badge">예약 완료</span>'
@@ -310,7 +322,7 @@ function render() {
         (d.checked ? '<div class="checked">' + esc(d.checked) + " 기준 (매일 아침 확인)</div>" : "") + "</div>";
     }
     return '<div class="box"><div class="top"><div class="date">' + esc(d.label) + badge + '</div><div class="time">' +
-      esc(d.time) + "</div></div>" +
+      esc(timeLabel(d)) + "</div></div>" +
       '<div class="meta">' + (d.due ? "응답 마감 " + esc(d.due) + " · " : "") + "가능 " + ok + "/" + names.length + "명</div>" +
       (d.status === "예약 완료" ? '<div class="bk">' + esc(bookingText(d)) + "</div>" : "") +
       '<div class="btns">' + btn("O", "O", "가능") + btn("△", "T", "늦게·일찍") + btn("X", "X", "불가") + "</div>" +
@@ -405,11 +417,20 @@ function renderInfo() {
   document.getElementById("nextBox").innerHTML = booked.length
     ? nextCard(booked[0]) + (booked.length > 1
         ? '<div class="box"><div class="label">예약된 합주</div>' + booked.map(function (d) {
-            return '<div class="pm"><span>' + esc(d.label) + " " + esc(d.time) + "</span><b>" +
+            return '<div class="pm"><span>' + esc(d.label) + " " + esc(timeLabel(d)) + "</span><b>" +
               esc(d.booking ? [d.booking.place, d.booking.room].filter(Boolean).join(" ") : "") + "</b></div>";
           }).join("") + "</div>"
         : "")
     : '<div class="box"><div class="label">다음 합주</div>아직 예약된 합주가 없어요. 예약되면 여기와 날짜 체크 탭 맨 위에 나와요.</div>';
+  var hist = DATA.history || [];
+  if (hist.length) {
+    document.getElementById("nextBox").innerHTML += '<div class="box"><div class="label">지난 합주 · 총 ' + (DATA.historyCount || hist.length) + "회</div>" +
+      hist.map(function (h) {
+        var where = [h.place, h.room].filter(Boolean).join(" ");
+        var sub = [h.time, where, h.people].filter(Boolean).join(" · ");
+        return '<div class="tx"><div><div>' + esc(h.label) + "</div>" + (sub ? '<div class="d">' + esc(sub) + "</div>" : "") + "</div></div>";
+      }).join("") + "</div>";
+  }
 }
 
 function loadDues() {
