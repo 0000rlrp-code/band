@@ -38,7 +38,7 @@
   .badge { display:inline-block; vertical-align:middle; font-size:12px; font-weight:500; padding:2px 8px; border-radius:999px;
            background:var(--ob); color:var(--o); margin-left:6px; }
   .badge.late { background:var(--xb); color:var(--x); }
-  .btns { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .btns { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
   .btn { border:1.5px solid var(--line); background:#fff; border-radius:12px; padding:10px 4px; font:inherit; font-size:14px;
          cursor:pointer; min-height:64px; color:var(--ink); transition:transform .08s; }
   .btn b { display:block; font-size:22px; line-height:1.2; }
@@ -74,9 +74,9 @@
   .skel { height:150px; border-radius:16px; background:linear-gradient(90deg,#eceff4 25%,#f6f7fa 50%,#eceff4 75%);
           background-size:200% 100%; animation:sh 1.2s infinite; margin-bottom:12px; }
   @keyframes sh { to { background-position:-200% 0; } }
-  .tabs { display:none; grid-template-columns:1fr 1fr 1fr; gap:6px; background:#e8ecf3; padding:4px; border-radius:12px; margin-bottom:12px; }
+  .tabs { display:none; grid-template-columns:repeat(4,1fr); gap:6px; background:#e8ecf3; padding:4px; border-radius:12px; margin-bottom:12px; }
   .tabs.show { display:grid; }
-  .tab { border:0; background:transparent; border-radius:9px; padding:10px; font:inherit; font-size:15px; color:var(--mute); cursor:pointer; min-height:42px; }
+  .tab { border:0; background:transparent; border-radius:9px; padding:10px 2px; font:inherit; font-size:14.5px; white-space:nowrap; color:var(--mute); cursor:pointer; min-height:42px; }
   .tab.on { background:#fff; color:var(--navy); font-weight:700; box-shadow:0 1px 4px rgba(0,0,0,.08); }
   /* 예약 전에 꼭 누르도록 눈에 띄게: 청록 카드 + 큰 버튼 */
   .chk { display:flex; flex-direction:column; gap:8px; margin:0 0 12px; padding:14px; border-radius:16px;
@@ -142,6 +142,31 @@
   .bksave { width:100%; border:0; border-radius:12px; background:var(--navy); color:#fff; font:inherit; font-size:16px;
             font-weight:700; min-height:44px; cursor:pointer; margin-top:4px; }
   .bksave:disabled { opacity:.5; }
+  /* 지각: 멤버별 현황(누적 점 2개·미납), 벌금 목록, 기록 목록 */
+  .rule { font-size:13px; color:var(--mute); line-height:1.65; }
+  .rule b { color:var(--ink); font-weight:500; }
+  .lt { display:grid; grid-template-columns:1fr auto auto; gap:12px; align-items:center; padding:11px 0; border-bottom:1px solid var(--line); }
+  .lt:last-child, .pen:last-child, .lr:last-child { border-bottom:0; }
+  .lt .nm { font-size:16px; font-weight:700; }
+  .lt .s, .pen .s { font-size:12px; color:var(--mute); margin-top:2px; }
+  .dots { display:inline-flex; gap:4px; align-items:center; font-size:12px; color:var(--mute); white-space:nowrap; }
+  .dot { width:13px; height:13px; border-radius:50%; border:1.5px solid #cbd2dc; }
+  .dot.on { background:var(--t); border-color:var(--t); }
+  .owe { font-size:14px; font-weight:700; white-space:nowrap; text-align:right; min-width:72px; }
+  .owe.red { color:var(--x); }
+  .owe.ok { color:#aab0ba; font-weight:400; font-size:13px; }
+  .pen { padding:11px 0; border-bottom:1px solid var(--line); }
+  .pen .h { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:15px; }
+  .tag { display:inline-block; font-size:11.5px; padding:2px 8px; border-radius:999px; margin-left:6px; vertical-align:middle; font-weight:500; }
+  .tag.unpaid { background:var(--xb); color:var(--x); }
+  .tag.paid { background:var(--ob); color:var(--o); }
+  .payrow { display:flex; gap:6px; margin-top:8px; }
+  .payrow input { flex:1; min-width:0; border:1.5px solid var(--line); border-radius:10px; padding:8px; font:inherit; font-size:15px; text-align:right; }
+  .mini { flex:none; border:1px solid var(--navy); background:#fff; color:var(--navy); border-radius:10px; padding:6px 12px; font:inherit; font-size:13.5px; cursor:pointer; }
+  .lr { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:9px 0; border-bottom:1px solid var(--line); font-size:14.5px; }
+  .kind { font-size:12.5px; padding:2px 8px; border-radius:6px; background:var(--tb); color:var(--t); white-space:nowrap; }
+  .kind.big { background:var(--xb); color:var(--x); }
+  .del { border:0; background:transparent; color:#aab0ba; font-size:18px; line-height:1; padding:4px 6px; cursor:pointer; }
   #toast { position:fixed; left:50%; bottom:calc(20px + env(safe-area-inset-bottom)); transform:translateX(-50%); background:var(--navy);
            color:#fff; padding:10px 18px; border-radius:999px; font-size:14px; opacity:0; transition:opacity .2s; pointer-events:none; }
   #toast.show { opacity:1; }
@@ -152,11 +177,11 @@
   <header>
     <div>
       <h1>HanDler</h1>
-      <p class="sub" id="sub">되는 날은 O, 늦게 오거나 일찍 가면 △, 안 되면 X. 되는 시간도 30분 단위로 고를 수 있고, 시간을 고르면 자동으로 O가 돼요.</p>
+      <p class="sub" id="sub">되는 날은 O, 안 되면 X. 되는 시간을 30분 단위로 고르면 자동으로 O가 돼요. 늦게 오거나 일찍 가는 날은 시간을 그렇게 골라 주세요.</p>
     </div>
     <button class="refresh" id="refresh">새로고침</button>
   </header>
-  <div class="tabs show" id="tabs"><button class="tab on" data-tab="vote">날짜 체크</button><button class="tab" data-tab="dues">회비</button><button class="tab" data-tab="info">합주</button></div>
+  <div class="tabs show" id="tabs"><button class="tab on" data-tab="vote">날짜 체크</button><button class="tab" data-tab="dues">회비</button><button class="tab" data-tab="info">합주</button><button class="tab" data-tab="late">지각</button></div>
   <div id="voteView">
     <div id="nextTop"></div>
     <div class="box who"><div class="label">나는 (한 번 고르면 다음에도 기억해요)</div><div id="members" class="chips"></div></div>
@@ -182,6 +207,7 @@
   <div id="infoView" class="hide">
     <div id="nextBox"><div class="skel" style="height:90px"></div></div>
   </div>
+  <div id="lateView" class="hide"><div id="lateBox"><div class="skel" style="height:120px"></div></div></div>
 </div>
 <div id="toast"></div>
 <script>
@@ -214,6 +240,7 @@ function load(quiet) {
       DATA = d;
       render();
       renderInfo();
+      renderLate();
       if (quiet === "button") toast("최신으로 바꿨어요");
       if (d.refreshPending && !refreshing) watchRefresh(d.checkedAt || ""); // 다른 사람이 누른 빈방 확인이 진행 중
     })
@@ -534,7 +561,7 @@ function render() {
       esc(timeLabel(d)) + "</div></div>" +
       '<div class="meta">' + (d.due ? "응답 마감 " + esc(d.due) + " · " : "") + "가능 " + ok + "/" + names.length + "명</div>" +
       (d.status === "예약 완료" ? '<div class="bk">' + esc(bookingText(d)) + "</div>" : "") +
-      '<div class="btns">' + btn("O", "O", "가능") + btn("△", "T", "늦게·일찍") + btn("X", "X", "불가") + "</div>" +
+      '<div class="btns">' + btn("O", "O", "가능") + btn("X", "X", "불가") + "</div>" +
       timeRow + '<div class="others">' + others + "</div>" + ov + rooms + bookUi(d) + "</div>";
   }).join("");
 }
@@ -616,6 +643,8 @@ function showTab(name) {
   document.getElementById("voteView").className = name === "vote" ? "" : "hide";
   document.getElementById("duesView").className = name === "dues" ? "" : "hide";
   document.getElementById("infoView").className = name === "info" ? "" : "hide";
+  document.getElementById("lateView").className = name === "late" ? "" : "hide";
+  if (name === "late") renderLate();
   document.getElementById("sub").className = "sub" + (name === "vote" ? "" : " hide");
   if (name === "dues" && !DUES) loadDues();
   if (name === "info") renderInfo();
@@ -642,6 +671,138 @@ function renderInfo() {
       }).join("") + "</div>";
   }
 }
+
+// ---------- 지각 (기록·벌금은 모두에게 공개, 기록·납부 처리는 관리자만) ----------
+var lateForm = {date: "", member: "", kind: "5~30분"}, lateSaving = false;
+var LATE_KINDS = ["5~30분", "30분 이상", "노쇼"];
+
+function dayLabel(ymd) {
+  var p = String(ymd).split("-");
+  var w = "일월화수목금토".charAt(new Date(ymd + "T00:00:00Z").getUTCDay());
+  return Number(p[1]) + "/" + Number(p[2]) + " (" + w + ")";
+}
+
+// 기록할 수 있는 날: 오늘 합주(예약 완료) + 지난 합주 최근 8번
+function lateDates() {
+  var out = [], t = today();
+  (DATA.booked || []).forEach(function (d) { if (d.date === t) out.push(d.date); });
+  (DATA.history || []).slice(0, 8).forEach(function (h) { if (out.indexOf(h.date) === -1) out.push(h.date); });
+  return out;
+}
+
+function renderLate() {
+  if (!DATA) return;
+  var L = DATA.late || {count: {}, penalties: [], records: []};
+  var names = DATA.members.map(function (m) { return m.name; });
+  var owe = {}, times = {};
+  L.penalties.forEach(function (p) {
+    if (p.paid) return;
+    var o = owe[p.member] || (owe[p.member] = {amt: 0, unknown: false});
+    if (p.amount) o.amt += p.amount; else o.unknown = true;
+  });
+  L.records.forEach(function (r) { times[r.member] = (times[r.member] || 0) + 1; });
+  function dot(on) { return '<span class="dot' + (on ? " on" : "") + '"></span>'; }
+
+  var status = '<div class="box"><div class="label">멤버별 현황 · 주황 점은 5~30분 지각, 2개 차면 다음 합주비</div>' + names.map(function (n) {
+    var c = L.count[n] || 0, o = owe[n];
+    var oweTxt = o ? [o.amt ? won(o.amt) : "", o.unknown ? "금액 미정" : ""].filter(Boolean).join(" + ") + " 미납" : "미납 없음";
+    return '<div class="lt"><div><div class="nm">' + esc(n) + '</div><div class="s">지각 기록 ' + (times[n] || 0) + "회</div></div>" +
+      '<span class="dots">' + dot(c >= 1) + dot(c >= 2) + "&nbsp;" + c + "/2</span>" +
+      '<span class="owe ' + (o ? "red" : "ok") + '">' + esc(oweTxt) + "</span></div>";
+  }).join("") + "</div>";
+
+  var rule = '<div class="box rule"><b>규칙</b> · 5~30분 지각 2번이면 다음 합주비, 30분 이상·노쇼는 그날 합주비를 내요. ' +
+    "응답 마감 전에 내 가능 시간을 적어 두면 그 시작 시각 기준으로 봐요.</div>";
+
+  var pens = '<div class="box"><div class="label">벌금</div>' + (L.penalties.length ? L.penalties.map(function (p) {
+    var amt = p.amount ? won(p.amount) : "금액 미정";
+    var pay = ADMIN && !p.paid
+      ? '<div class="payrow"><input data-payamt="' + p.row + '" inputmode="numeric" placeholder="금액" value="' +
+        (p.amount ? Number(p.amount).toLocaleString("ko-KR") : "") + '"><button class="mini" data-pay="' + p.row + '">납부 처리</button></div>' : "";
+    return '<div class="pen"><div class="h"><span><b>' + esc(p.member) + "</b>" +
+      (p.paid ? '<span class="tag paid">납부 ' + esc(dayLabel(p.paid).split(" ")[0]) + "</span>" : '<span class="tag unpaid">미납</span>') +
+      "</span><b>" + esc(amt) + "</b></div>" +
+      '<div class="s">' + esc(dayLabel(p.date)) + " · " + esc(p.reason) + " → " + esc(p.target) + "</div>" + pay + "</div>";
+  }).join("") : '<div class="rule">아직 벌금이 없어요.</div>') + "</div>";
+
+  var form = "";
+  if (ADMIN) {
+    var ds = lateDates();
+    if (ds.indexOf(lateForm.date) === -1) lateForm.date = ds[0] || "";
+    form = '<div class="box"><div class="label">지각 기록하기 (관리자)</div>' + (ds.length
+      ? '<div class="field"><div class="label">합주 날짜</div><select class="text" data-lf="date">' + ds.map(function (d) {
+          return '<option value="' + d + '"' + (d === lateForm.date ? " selected" : "") + ">" + esc(dayLabel(d)) + "</option>";
+        }).join("") + "</select></div>" +
+        '<div class="field"><div class="label">누가</div><div class="chips">' + names.map(function (n) {
+          return '<button class="pick' + (n === lateForm.member ? " on" : "") + '" data-lm="' + esc(n) + '">' + esc(n) + "</button>";
+        }).join("") + "</div></div>" +
+        '<div class="field"><div class="label">얼마나</div><div class="chips">' + LATE_KINDS.map(function (k) {
+          return '<button class="pick' + (k === lateForm.kind ? " on" : "") + '" data-lk="' + esc(k) + '">' + esc(k) + "</button>";
+        }).join("") + "</div></div>" +
+        '<button class="save" data-latesave>기록 저장</button>'
+      : '<div class="rule">기록할 합주가 아직 없어요. 합주가 끝나면 여기에 날짜가 나와요.</div>') + "</div>";
+  }
+
+  var recs = L.records.length ? '<div class="box"><div class="label">지각 기록 · 총 ' + L.records.length + "회</div>" +
+    L.records.map(function (r) {
+      return '<div class="lr"><span>' + esc(dayLabel(r.date)) + " · <b>" + esc(r.member) + "</b></span><span>" +
+        '<span class="kind' + (r.kind === "5~30분" ? "" : " big") + '">' + esc(r.kind) + "</span>" +
+        (ADMIN ? '<button class="del" title="지우기" data-latedel="' + r.row + '" data-d="' + r.date + '" data-m="' + esc(r.member) + '">×</button>' : "") +
+        "</span></div>";
+    }).join("") + "</div>" : "";
+
+  document.getElementById("lateBox").innerHTML = status + pens + form + recs + rule;
+}
+
+function latePost(body, okMsg) {
+  if (lateSaving) return;
+  lateSaving = true;
+  body.a = ADMIN;
+  fetch(API, {method: "POST", body: JSON.stringify(body)})
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (d.error) throw new Error(d.error);
+      DATA.late = d.late;
+      if (body.action === "late_paid") DUES = null; // 회비 탭은 다음에 열 때 새로 불러온다
+      renderLate();
+      toast(okMsg);
+    })
+    .catch(function (e) { toast(e.message || "저장하지 못했어요"); })
+    .then(function () { lateSaving = false; });
+}
+
+document.addEventListener("change", function (ev) {
+  if (ev.target.matches && ev.target.matches('[data-lf="date"]')) lateForm.date = ev.target.value;
+});
+
+document.addEventListener("click", function (ev) {
+  var t = ev.target;
+  if (!ADMIN || !DATA || !t.closest("#lateBox")) return;
+  var m = t.closest("[data-lm]"), k = t.closest("[data-lk]");
+  if (m) { lateForm.member = m.getAttribute("data-lm"); renderLate(); return; }
+  if (k) { lateForm.kind = k.getAttribute("data-lk"); renderLate(); return; }
+  if (t.closest("[data-latesave]")) {
+    if (!lateForm.date || !lateForm.member) { toast("누가 늦었는지 골라 주세요"); return; }
+    var who = lateForm.member;
+    latePost({action: "late_add", date: lateForm.date, member: who, kind: lateForm.kind}, who + " " + lateForm.kind + " 기록했어요");
+    lateForm.member = "";
+    return;
+  }
+  var del = t.closest("[data-latedel]");
+  if (del) {
+    var dm = del.getAttribute("data-m"), dd = del.getAttribute("data-d");
+    if (confirm(dayLabel(dd) + " " + dm + " 기록을 지울까요?")) latePost({action: "late_del", row: Number(del.getAttribute("data-latedel")), date: dd, member: dm}, "지웠어요");
+    return;
+  }
+  var pay = t.closest("[data-pay]");
+  if (pay) {
+    var row = pay.getAttribute("data-pay");
+    var inp = document.querySelector('[data-payamt="' + row + '"]');
+    var amt = Number(String(inp && inp.value || "").replace(/[^0-9]/g, "")) || 0;
+    if (!amt) { toast("금액을 넣어 주세요"); return; }
+    if (confirm(won(amt) + " 납부 처리하고 회비에 '지각' 입금으로 적을까요?")) latePost({action: "late_paid", row: Number(row), amount: amt}, "납부 처리했어요");
+  }
+});
 
 function loadDues() {
   var q = ADMIN ? "&a=" + encodeURIComponent(ADMIN) : "&mc=" + encodeURIComponent(CODE);
