@@ -99,6 +99,12 @@
   .notice p:first-child { font-weight:700; color:var(--navy); }
   .next .w { font-size:14px; margin-top:6px; opacity:.9; }
   .bk { margin:-4px 0 12px; padding:8px 10px; border-radius:10px; background:var(--ob); color:var(--o); font-size:13.5px; font-weight:500; }
+  .tm { display:flex; align-items:center; gap:6px; margin-top:10px; padding:10px; border-radius:12px; background:var(--bg); flex-wrap:wrap; }
+  .tm .lb { font-size:13px; color:var(--mute); margin-right:2px; }
+  .tm select { border:1.5px solid var(--line); background:#fff; border-radius:10px; padding:8px 6px; font:inherit; font-size:15px; min-height:40px; color:var(--ink); }
+  .tm .clr { border:0; background:transparent; color:var(--mute); font:inherit; font-size:13px; text-decoration:underline; cursor:pointer; margin-left:auto; }
+  .ov { margin-top:10px; font-size:13.5px; color:var(--o); font-weight:500; }
+  .ov.none { color:var(--x); }
   .pm { display:flex; justify-content:space-between; padding:7px 0; font-size:14px; border-bottom:1px solid var(--line); }
   .pm:last-child { border-bottom:0; }
   #toast { position:fixed; left:50%; bottom:calc(20px + env(safe-area-inset-bottom)); transform:translateX(-50%); background:var(--navy);
@@ -111,11 +117,11 @@
   <header>
     <div>
       <h1>밴드 합주</h1>
-      <p class="sub" id="sub">되는 날은 O, 늦게 오거나 일찍 가면 △, 안 되면 X. 누르면 바로 저장되고, 한 번 더 누르면 지워져요.</p>
+      <p class="sub" id="sub">되는 날은 O, 늦게 오거나 일찍 가면 △, 안 되면 X. O나 △를 누르면 되는 시간도 30분 단위로 고를 수 있어요.</p>
     </div>
     <button class="refresh" id="refresh">새로고침</button>
   </header>
-  <div class="tabs show" id="tabs"><button class="tab on" data-tab="vote">날짜 체크</button><button class="tab" data-tab="dues">회비</button><button class="tab" data-tab="info">안내</button></div>
+  <div class="tabs show" id="tabs"><button class="tab on" data-tab="vote">날짜 체크</button><button class="tab" data-tab="dues">회비</button><button class="tab" data-tab="info">다음 합주</button></div>
   <div id="voteView">
     <div id="nextTop"></div>
     <div class="box who"><div class="label">나는 (한 번 고르면 다음에도 기억해요)</div><div id="members" class="chips"></div></div>
@@ -138,8 +144,7 @@
     <div class="box" id="perMemberBox"><div class="label">멤버별 납부 (입금자가 적힌 것만)</div><div id="perMember"></div></div>
   </div>
   <div id="infoView" class="hide">
-    <div id="nextBox"></div>
-    <div class="box notice" id="notice"><div class="skel" style="height:120px;margin:0"></div></div>
+    <div id="nextBox"><div class="skel" style="height:90px"></div></div>
   </div>
 </div>
 <div id="toast"></div>
@@ -181,6 +186,52 @@ function load(quiet) {
     });
 }
 
+// 09:00 ~ 24:00, 30분 단위. 시작 칸에는 24:00을 빼고, 끝 칸에는 09:00을 뺀다.
+function timeSelect(which, value) {
+  var opts = ['<option value="">' + (which === "from" ? "부터" : "까지") + "</option>"];
+  for (var m = 9 * 60; m <= 24 * 60; m += 30) {
+    if ((which === "from" && m === 24 * 60) || (which === "to" && m === 9 * 60)) continue;
+    var t = ("0" + Math.floor(m / 60)).slice(-2) + ":" + ("0" + (m % 60)).slice(-2);
+    opts.push('<option value="' + t + '"' + (t === value ? " selected" : "") + ">" + t + "</option>");
+  }
+  return '<select data-which="' + which + '">' + opts.join("") + "</select>";
+}
+
+function saveTime(row, date, from, to) {
+  pending++;
+  fetch(API, {method: "POST", body: JSON.stringify({action: "vote", kind: "time", c: CODE, member: me, row: row, date: date, from: from, to: to})})
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      pending--;
+      if (d.error) throw new Error(d.error);
+      if (!pending) { DATA = d; render(); }
+      toast(from ? "시간을 저장했어요" : "시간 상관없음으로 바꿨어요");
+    })
+    .catch(function (e) {
+      pending = Math.max(0, pending - 1);
+      toast(e.message || "저장하지 못했어요");
+      load(true);
+    });
+}
+
+document.addEventListener("change", function (ev) {
+  var sel = ev.target.closest(".tm select");
+  if (!sel) return;
+  var box = sel.closest(".tm");
+  var from = box.querySelector('[data-which="from"]').value;
+  var to = box.querySelector('[data-which="to"]').value;
+  if (!from || !to) return; // 둘 다 고르면 저장
+  if (from >= to) { toast("끝 시간이 시작보다 늦어야 해요"); return; }
+  saveTime(Number(box.getAttribute("data-row")), box.getAttribute("data-date"), from, to);
+});
+
+document.addEventListener("click", function (ev) {
+  var clr = ev.target.closest(".tm .clr");
+  if (!clr) return;
+  var box = clr.closest(".tm");
+  saveTime(Number(box.getAttribute("data-row")), box.getAttribute("data-date"), "", "");
+});
+
 function bookingText(d) {
   var b = d.booking;
   if (!b) return "예약 완료";
@@ -218,8 +269,21 @@ function render() {
     }
     var others = names.map(function (n) {
       var v = d.answers[n] || "";
-      return '<span class="pill ' + cls(v) + '">' + esc(n) + " " + (v || "-") + "</span>";
+      var t = (v === "O" || v === "△") && d.times && d.times[n] ? " " + d.times[n] : "";
+      return '<span class="pill ' + cls(v) + '">' + esc(n) + " " + (v || "-") + esc(t) + "</span>";
     }).join("");
+    var timeRow = "";
+    if (me && (mine === "O" || mine === "△") && d.status !== "예약 완료") {
+      var cur = (d.times && d.times[me] || "").split("~");
+      timeRow = '<div class="tm" data-row="' + d.row + '" data-date="' + d.date + '"><span class="lb">내 가능 시간</span>' +
+        timeSelect("from", cur[0] || "") + "<span>~</span>" + timeSelect("to", cur[1] || "") +
+        (cur[0] ? '<button class="clr">상관없음</button>' : "") + "</div>";
+    }
+    var ov = "";
+    if (d.overlap) {
+      ov = '<div class="ov' + (d.suggest ? "" : " none") + '">겹치는 시간 ' + esc(d.overlap) +
+        (d.suggest ? " · 추천 " + esc(d.suggest) : " · 2시간이 안 돼요") + "</div>";
+    }
     var rooms = "";
     if (d.status !== "예약 완료" && (d.dream || d.startree)) {
       rooms = '<div class="rooms">' +
@@ -232,7 +296,7 @@ function render() {
       '<div class="meta">' + (d.due ? "응답 마감 " + esc(d.due) + " · " : "") + "가능 " + ok + "/" + names.length + "명</div>" +
       (d.status === "예약 완료" ? '<div class="bk">' + esc(bookingText(d)) + "</div>" : "") +
       '<div class="btns">' + btn("O", "O", "가능") + btn("△", "T", "늦게·일찍") + btn("X", "X", "불가") + "</div>" +
-      '<div class="others">' + others + "</div>" + rooms + "</div>";
+      timeRow + '<div class="others">' + others + "</div>" + ov + rooms + "</div>";
   }).join("");
 }
 
@@ -328,10 +392,6 @@ function renderInfo() {
           }).join("") + "</div>"
         : "")
     : '<div class="box"><div class="label">다음 합주</div>아직 예약된 합주가 없어요. 예약되면 여기와 날짜 체크 탭 맨 위에 나와요.</div>';
-  var lines = DATA.notice || [];
-  document.getElementById("notice").innerHTML = lines.length
-    ? lines.map(function (l) { return "<p>" + esc(l) + "</p>"; }).join("")
-    : '<div class="empty">공지가 없어요</div>';
 }
 
 function loadDues() {
