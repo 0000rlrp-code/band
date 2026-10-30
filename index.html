@@ -63,6 +63,14 @@
   .tabs.show { display:grid; }
   .tab { border:0; background:transparent; border-radius:9px; padding:10px; font:inherit; font-size:15px; color:var(--mute); cursor:pointer; min-height:42px; }
   .tab.on { background:#fff; color:var(--navy); font-weight:700; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+  /* 예약 전에 꼭 누르도록 눈에 띄게: 청록 카드 + 큰 버튼 */
+  .chk { display:flex; flex-direction:column; gap:8px; margin:0 0 12px; padding:14px; border-radius:16px;
+         background:#e6f4f1; border:1.5px solid #0f766e; font-size:13.5px; color:#0f5e57; }
+  .chk::before { content:"예약하기 전에 빈방을 새로 확인해 주세요"; font-weight:700; font-size:15px; color:#0f5e57; }
+  .chkbtn { width:100%; border:0; background:#0f766e; color:#fff; border-radius:12px; padding:12px; font:inherit; font-size:16px;
+            font-weight:700; cursor:pointer; min-height:50px; box-shadow:0 2px 8px rgba(15,118,110,.25); }
+  .chkbtn:active { transform:scale(.98); }
+  .chkbtn:disabled { opacity:.55; cursor:default; box-shadow:none; }
   .hide { display:none !important; }
   .sum { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
   .sum .big { grid-column:1 / -1; }
@@ -137,6 +145,7 @@
   <div id="voteView">
     <div id="nextTop"></div>
     <div class="box who"><div class="label">나는 (한 번 고르면 다음에도 기억해요)</div><div id="members" class="chips"></div></div>
+    <div class="chk"><span id="chkText"></span><button class="chkbtn" id="chkBtn">빈방 새로고침 (1~2분)</button></div>
     <div id="list"><div class="skel"></div><div class="skel"></div></div>
   </div>
   <div id="duesView" class="hide">
@@ -191,10 +200,66 @@ function load(quiet) {
       render();
       renderInfo();
       if (quiet === "button") toast("최신으로 바꿨어요");
+      if (d.refreshPending && !refreshing) watchRefresh(d.checkedAt || ""); // 다른 사람이 누른 빈방 확인이 진행 중
     })
     .catch(function (e) {
+      if (quiet === "silent" && DATA) return; // 빈방 확인을 기다리는 동안 한 번 실패해도 화면은 그대로 둔다
       document.getElementById("list").innerHTML =
         '<div class="box error">불러오지 못했어요.<br>' + esc(e.message || "") + '<br>잠시 뒤 새로고침해 주세요.</div>';
+    });
+}
+
+// ---------- 빈방 새로고침 (누르면 서버가 1분 안에 다시 확인한다) ----------
+var refreshing = false, refreshSending = false, refreshTimer = 0;
+
+function updateBar() {
+  var txt = document.getElementById("chkText"), btn = document.getElementById("chkBtn");
+  txt.textContent = refreshing ? "확인 중… (1~2분)" : !DATA ? "" : DATA.checkedAt ? "빈방 기준 " + DATA.checkedAt : "빈방 아직 확인 전";
+  btn.disabled = refreshing || refreshSending;
+}
+
+function stopRefresh() {
+  refreshing = false;
+  clearTimeout(refreshTimer);
+  updateBar();
+}
+
+// 30초마다 조용히 다시 읽어서 확인 시각이 base에서 바뀌면 끝, 5분이 지나면 포기한다
+function watchRefresh(base) {
+  var started = Date.now();
+  refreshing = true;
+  clearTimeout(refreshTimer);
+  updateBar();
+  function tick() {
+    refreshTimer = setTimeout(function () {
+      load("silent").then(function () {
+        if (!refreshing) return;
+        if (DATA && (DATA.checkedAt || "") !== base) { stopRefresh(); toast("빈방을 새로 확인했어요"); return; }
+        if (Date.now() - started >= 5 * 60 * 1000) { stopRefresh(); toast("아직 확인 중이에요. 잠시 뒤 새로고침해 주세요"); return; }
+        tick();
+      });
+    }, 30000);
+  }
+  tick();
+}
+
+function refreshRooms() {
+  if (refreshing || refreshSending || !DATA) return;
+  var base = DATA.checkedAt || "";
+  refreshSending = true;
+  updateBar();
+  fetch(API, {method: "POST", body: JSON.stringify({action: "refresh", c: CODE})})
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (d.error) throw new Error(d.error);
+      refreshSending = false;
+      if (d.status === "recent") { updateBar(); toast((d.checked || "방금") + "에 막 확인했어요. 10분 뒤에 다시 눌러 주세요"); return; }
+      watchRefresh(base);
+    })
+    .catch(function (e) {
+      refreshSending = false;
+      updateBar();
+      toast(e.message || "요청하지 못했어요");
     });
 }
 
@@ -281,6 +346,7 @@ function nextCard(d) {
 
 function render() {
   if (!DATA) return;
+  updateBar();
   document.getElementById("nextTop").innerHTML = DATA.next ? nextCard(DATA.next) : "";
   var names = DATA.members.map(function (m) { return m.name; });
   if (names.indexOf(me) === -1) me = "";
@@ -331,7 +397,7 @@ function render() {
       rooms = '<div class="rooms">' +
         (d.dream ? "<div><b>드림 빈방</b>" + esc(d.dream) + "</div>" : "") +
         (d.startree ? "<div><b>별나무 빈방</b>" + esc(d.startree) + "</div>" : "") +
-        (d.checked ? '<div class="checked">' + esc(d.checked) + " 기준 (매일 아침 확인)</div>" : "") + "</div>";
+        (d.checked ? '<div class="checked">' + esc(d.checked) + " 기준</div>" : "") + "</div>";
     }
     return '<div class="box"><div class="top"><div class="date">' + esc(d.label) + badge + '</div><div class="time">' +
       esc(timeLabel(d)) + "</div></div>" +
@@ -369,6 +435,7 @@ document.addEventListener("click", function (ev) {
     return;
   }
   if (ev.target.closest("#refresh")) { load("button"); return; }
+  if (ev.target.closest("#chkBtn")) { refreshRooms(); return; }
   var b = ev.target.closest(".btn");
   if (!b || b.disabled || !DATA) return;
   var row = Number(b.getAttribute("data-row"));
@@ -602,7 +669,9 @@ function bookUi(d) {
   if (!ADMIN || d.status === "예약 완료") return "";
   var open = bookingOpenRow === d.row && bookForm;
   return '<button class="bkbtn" data-book="' + d.row + '">' + (open ? "닫기" : "예약 완료 처리") + "</button>" +
-    (open ? '<div class="bkform" data-row="' + d.row + '">' + bookFormInner() + "</div>" : "");
+    (open ? '<div class="bkform" data-row="' + d.row + '">' +
+      '<div class="checked" style="margin:0 0 8px">빈방 기준 ' + esc(DATA && DATA.checkedAt || "확인 전") +
+      ". 오래됐으면 맨 위 '빈방 새로고침'을 먼저 눌러 주세요.</div>" + bookFormInner() + "</div>" : "");
 }
 
 function saveBooking() {
