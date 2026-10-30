@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#2B3A55">
-<title>합주 가능 날짜</title>
+<title>밴드 합주</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
@@ -59,7 +59,7 @@
   .skel { height:150px; border-radius:16px; background:linear-gradient(90deg,#eceff4 25%,#f6f7fa 50%,#eceff4 75%);
           background-size:200% 100%; animation:sh 1.2s infinite; margin-bottom:12px; }
   @keyframes sh { to { background-position:-200% 0; } }
-  .tabs { display:none; grid-template-columns:1fr 1fr; gap:6px; background:#e8ecf3; padding:4px; border-radius:12px; margin-bottom:12px; }
+  .tabs { display:none; grid-template-columns:1fr 1fr 1fr; gap:6px; background:#e8ecf3; padding:4px; border-radius:12px; margin-bottom:12px; }
   .tabs.show { display:grid; }
   .tab { border:0; background:transparent; border-radius:9px; padding:10px; font:inherit; font-size:15px; color:var(--mute); cursor:pointer; min-height:42px; }
   .tab.on { background:#fff; color:var(--navy); font-weight:700; box-shadow:0 1px 4px rgba(0,0,0,.08); }
@@ -91,6 +91,14 @@
   .tx .amt.in { color:var(--o); }
   .tx .amt.out { color:var(--x); }
   .undo { border:0; background:transparent; color:#93c5fd; font:inherit; font-size:14px; margin-left:10px; cursor:pointer; text-decoration:underline; pointer-events:auto; }
+  .checked { color:var(--mute); font-size:11.5px; }
+  .next { background:var(--navy); color:#fff; border-color:var(--navy); }
+  .next .k { font-size:13px; opacity:.8; }
+  .next .v { font-size:22px; font-weight:700; margin-top:4px; }
+  .notice p { margin:0 0 8px; font-size:14.5px; line-height:1.6; }
+  .notice p:first-child { font-weight:700; color:var(--navy); }
+  .pm { display:flex; justify-content:space-between; padding:7px 0; font-size:14px; border-bottom:1px solid var(--line); }
+  .pm:last-child { border-bottom:0; }
   #toast { position:fixed; left:50%; bottom:calc(20px + env(safe-area-inset-bottom)); transform:translateX(-50%); background:var(--navy);
            color:#fff; padding:10px 18px; border-radius:999px; font-size:14px; opacity:0; transition:opacity .2s; pointer-events:none; }
   #toast.show { opacity:1; }
@@ -100,19 +108,19 @@
 <div class="wrap">
   <header>
     <div>
-      <h1>합주 가능 날짜</h1>
-      <p class="sub">되는 날은 O, 늦게 오거나 일찍 가면 △, 안 되면 X. 누르면 바로 저장되고, 한 번 더 누르면 지워져요.</p>
+      <h1>밴드 합주</h1>
+      <p class="sub" id="sub">되는 날은 O, 늦게 오거나 일찍 가면 △, 안 되면 X. 누르면 바로 저장되고, 한 번 더 누르면 지워져요.</p>
     </div>
     <button class="refresh" id="refresh">새로고침</button>
   </header>
-  <div class="tabs" id="tabs"><button class="tab on" data-tab="vote">날짜 체크</button><button class="tab" data-tab="dues">회비 관리</button></div>
+  <div class="tabs show" id="tabs"><button class="tab on" data-tab="vote">날짜 체크</button><button class="tab" data-tab="dues">회비</button><button class="tab" data-tab="info">안내</button></div>
   <div id="voteView">
     <div class="box who"><div class="label">나는 (한 번 고르면 다음에도 기억해요)</div><div id="members" class="chips"></div></div>
     <div id="list"><div class="skel"></div><div class="skel"></div></div>
   </div>
   <div id="duesView" class="hide">
     <div class="box sum" id="duesSum"><div class="skel big" style="height:70px;margin:0"></div></div>
-    <div class="box">
+    <div class="box hide" id="duesForm">
       <div class="seg"><button class="in on" data-type="in">입금</button><button class="out" data-type="out">지출</button></div>
       <div class="field"><div class="label">금액</div>
         <input class="amount" id="amount" inputmode="numeric" placeholder="0" autocomplete="off">
@@ -124,6 +132,11 @@
       <button class="save" id="save">입금 저장</button>
     </div>
     <div class="box"><div class="label">최근 내역</div><div id="recent"></div></div>
+    <div class="box" id="perMemberBox"><div class="label">멤버별 납부 (입금자가 적힌 것만)</div><div id="perMember"></div></div>
+  </div>
+  <div id="infoView" class="hide">
+    <div id="nextBox"></div>
+    <div class="box notice" id="notice"><div class="skel" style="height:120px;margin:0"></div></div>
   </div>
 </div>
 <div id="toast"></div>
@@ -156,6 +169,7 @@ function load(quiet) {
       if (d.error) throw new Error(d.error);
       DATA = d;
       render();
+      renderInfo();
       if (quiet === "button") toast("최신으로 바꿨어요");
     })
     .catch(function (e) {
@@ -195,7 +209,8 @@ function render() {
     if (d.status !== "예약 완료" && (d.dream || d.startree)) {
       rooms = '<div class="rooms">' +
         (d.dream ? "<div><b>드림 빈방</b>" + esc(d.dream) + "</div>" : "") +
-        (d.startree ? "<div><b>별나무 빈방</b>" + esc(d.startree) + "</div>" : "") + "</div>";
+        (d.startree ? "<div><b>별나무 빈방</b>" + esc(d.startree) + "</div>" : "") +
+        (d.checked ? '<div class="checked">' + esc(d.checked) + " 기준 (매일 아침 확인)</div>" : "") + "</div>";
     }
     return '<div class="box"><div class="top"><div class="date">' + esc(d.label) + badge + '</div><div class="time">' +
       esc(d.time) + "</div></div>" +
@@ -261,7 +276,6 @@ try {
 } catch (e) {}
 var DUES = null, dtype = "in", cat = "", payer = "", lastAdded = null, saving = false;
 var QUICK = {in: [50000, 250000, 10000], out: [32000, 28000, 36000]};
-if (ADMIN) document.getElementById("tabs").className = "tabs show";
 
 function won(n) { return Number(n || 0).toLocaleString("ko-KR") + "원"; }
 function today() { return new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10); } // 한국 날짜
@@ -281,11 +295,27 @@ function showTab(name) {
   [].forEach.call(document.querySelectorAll(".tab"), function (b) { b.className = "tab" + (b.getAttribute("data-tab") === name ? " on" : ""); });
   document.getElementById("voteView").className = name === "vote" ? "" : "hide";
   document.getElementById("duesView").className = name === "dues" ? "" : "hide";
+  document.getElementById("infoView").className = name === "info" ? "" : "hide";
+  document.getElementById("sub").className = "sub" + (name === "vote" ? "" : " hide");
   if (name === "dues" && !DUES) loadDues();
+  if (name === "info") renderInfo();
+}
+
+function renderInfo() {
+  if (!DATA) return;
+  var n = DATA.next;
+  document.getElementById("nextBox").innerHTML = n
+    ? '<div class="box next"><div class="k">다음 합주</div><div class="v">' + esc(n.label) + " " + esc(n.time) + "</div></div>"
+    : '<div class="box"><div class="label">다음 합주</div>아직 예약된 합주가 없어요.</div>';
+  var lines = DATA.notice || [];
+  document.getElementById("notice").innerHTML = lines.length
+    ? lines.map(function (l) { return "<p>" + esc(l) + "</p>"; }).join("")
+    : '<div class="empty">공지가 없어요</div>';
 }
 
 function loadDues() {
-  return fetch(API + "?action=dues&a=" + encodeURIComponent(ADMIN))
+  var q = ADMIN ? "&a=" + encodeURIComponent(ADMIN) : "&mc=" + encodeURIComponent(CODE);
+  return fetch(API + "?action=dues" + q)
     .then(function (r) { return r.json(); })
     .then(function (d) {
       if (d.error) throw new Error(d.error);
@@ -306,6 +336,22 @@ function renderDues() {
     '<div class="stat"><div class="k">남은 합주</div><div class="v' + (low ? " warn" : "") + '">' + (DUES.remaining === "" ? "-" : DUES.remaining + "회") +
     (DUES.status ? ' <span style="font-size:12px;font-weight:500">' + esc(DUES.status) + "</span>" : "") + "</div></div>" +
     '<div class="stat"><div class="k">총 입금 / 총 지출</div><div class="v" style="font-size:14px">' + won(DUES.totalIn) + " / " + won(DUES.totalOut) + "</div></div>";
+  document.getElementById("recent").innerHTML = DUES.recent.length ? DUES.recent.map(function (x) {
+    var desc = [x.memo, x.who].filter(Boolean).join(" · ") || (x.type === "in" ? "입금" : "지출");
+    return '<div class="tx"><div><div>' + esc(desc) + '</div><div class="d">' + esc(x.date || "날짜 없음") + "</div></div>" +
+      '<div class="amt ' + x.type + '">' + (x.type === "in" ? "+" : "-") + won(x.amount) + "</div></div>";
+  }).join("") : '<div class="empty">내역이 없어요</div>';
+  var pm = DUES.perMember || [];
+  document.getElementById("perMemberBox").className = "box" + (pm.length ? "" : " hide");
+  document.getElementById("perMember").innerHTML = pm.map(function (m) {
+    return '<div class="pm"><span>' + esc(m.name) + "</span><b>" + won(m.amount) + "</b></div>";
+  }).join("");
+  var canEdit = !!(ADMIN && DUES.catsIn);
+  document.getElementById("duesForm").className = "box" + (canEdit ? "" : " hide");
+  if (canEdit) renderDuesForm();
+}
+
+function renderDuesForm() {
   [].forEach.call(document.querySelectorAll(".seg button"), function (b) {
     var t = b.getAttribute("data-type");
     b.className = t + (t === dtype ? " on" : "");
@@ -323,11 +369,6 @@ function renderDues() {
     return '<button class="pick' + (p === payer ? " on" : "") + '" data-payer="' + esc(p) + '">' + esc(p) + "</button>";
   }).join("");
   document.getElementById("save").textContent = (dtype === "in" ? "입금" : "지출") + " 저장";
-  document.getElementById("recent").innerHTML = DUES.recent.length ? DUES.recent.map(function (x) {
-    var desc = [x.memo, x.who].filter(Boolean).join(" · ") || (x.type === "in" ? "입금" : "지출");
-    return '<div class="tx"><div><div>' + esc(desc) + '</div><div class="d">' + esc(x.date || "날짜 없음") + "</div></div>" +
-      '<div class="amt ' + x.type + '">' + (x.type === "in" ? "+" : "-") + won(x.amount) + "</div></div>";
-  }).join("") : '<div class="empty">내역이 없어요</div>';
 }
 
 function saveDues() {
