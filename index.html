@@ -117,7 +117,7 @@
   <header>
     <div>
       <h1>밴드 합주</h1>
-      <p class="sub" id="sub">되는 날은 O, 늦게 오거나 일찍 가면 △, 안 되면 X. O나 △를 누르면 되는 시간도 30분 단위로 고를 수 있어요.</p>
+      <p class="sub" id="sub">되는 날은 O, 늦게 오거나 일찍 가면 △, 안 되면 X. 되는 시간도 30분 단위로 고를 수 있고, 시간을 고르면 자동으로 O가 돼요.</p>
     </div>
     <button class="refresh" id="refresh">새로고침</button>
   </header>
@@ -222,7 +222,25 @@ document.addEventListener("change", function (ev) {
   var to = box.querySelector('[data-which="to"]').value;
   if (!from || !to) return; // 둘 다 고르면 저장
   if (from >= to) { toast("끝 시간이 시작보다 늦어야 해요"); return; }
-  saveTime(Number(box.getAttribute("data-row")), box.getAttribute("data-date"), from, to);
+  var row = Number(box.getAttribute("data-row")), date = box.getAttribute("data-date");
+  var cur = "";
+  DATA.dates.forEach(function (x) { if (x.row === row) cur = x.answers[me] || ""; });
+  if (cur) { saveTime(row, date, from, to); return; }
+  // 아직 답이 없으면 O를 먼저 저장하고 시간을 저장한다
+  DATA.dates.forEach(function (x) { if (x.row === row) x.answers[me] = "O"; });
+  pending++;
+  fetch(API, {method: "POST", body: JSON.stringify({action: "vote", c: CODE, member: me, row: row, date: date, value: "O"})})
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      pending--;
+      if (d.error) throw new Error(d.error);
+      saveTime(row, date, from, to);
+    })
+    .catch(function (e) {
+      pending = Math.max(0, pending - 1);
+      toast(e.message || "저장하지 못했어요");
+      load(true);
+    });
 });
 
 document.addEventListener("click", function (ev) {
@@ -273,7 +291,7 @@ function render() {
       return '<span class="pill ' + cls(v) + '">' + esc(n) + " " + (v || "-") + esc(t) + "</span>";
     }).join("");
     var timeRow = "";
-    if (me && (mine === "O" || mine === "△") && d.status !== "예약 완료") {
+    if (me && mine !== "X" && d.status !== "예약 완료") { // 아직 답 안 한 날도 보인다. 시간을 고르면 자동으로 O
       var cur = (d.times && d.times[me] || "").split("~");
       timeRow = '<div class="tm" data-row="' + d.row + '" data-date="' + d.date + '"><span class="lb">내 가능 시간</span>' +
         timeSelect("from", cur[0] || "") + "<span>~</span>" + timeSelect("to", cur[1] || "") +
