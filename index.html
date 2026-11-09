@@ -130,6 +130,11 @@
   .ov.none { color:var(--x); }
   .pm { display:flex; justify-content:space-between; padding:7px 0; font-size:14px; border-bottom:1px solid var(--line); }
   .pm:last-child { border-bottom:0; }
+  .gobook { margin-top:12px; }
+  .gobook .links { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .gobook a { display:flex; align-items:center; justify-content:center; min-height:44px; border-radius:12px; background:var(--navy); color:#fff;
+              font-size:14px; font-weight:700; text-decoration:none; text-align:center; padding:6px; }
+  .gobook .note { margin-top:6px; font-size:12px; color:var(--mute); line-height:1.5; }
   .bkbtn { margin-top:12px; width:100%; border:1.5px dashed var(--navy); background:#fff; color:var(--navy); border-radius:12px;
            font:inherit; font-size:14px; min-height:40px; cursor:pointer; }
   .bkform { margin-top:10px; padding:12px; border-radius:12px; background:var(--bg); }
@@ -968,11 +973,24 @@ function bookFormInner() {
     '<button class="bksave" data-booksave="1"' + (bookSaving ? " disabled" : "") + ">저장</button>";
 }
 
+// 합주실 예약 화면 바로가기. 주소만 열 뿐 합주실에 아무것도 보내지 않는다(예약·결제는 합주실 화면에서 직접).
+// 드림은 주소의 날짜로 바로 열린다. 별나무는 주소로 날짜를 넘길 수 없어 첫 화면을 연다.
+var DREAM_BOOK_URL = "https://www.xn--hy1bm6g6ujjkgomr.com/booking.php?branch=main&date=";
+var STARTREE_BOOK_URL = "https://startree.co.kr/";
+function goBookUi(d) {
+  function link(url, label) {
+    return '<a href="' + esc(url) + '" target="_blank" rel="noopener noreferrer">' + label + "</a>";
+  }
+  return '<div class="gobook"><div class="links">' +
+    link(DREAM_BOOK_URL + encodeURIComponent(d.date), "드림에서 예약") + link(STARTREE_BOOK_URL, "별나무에서 예약") +
+    '</div><div class="note">합주실 화면이 새 탭으로 열려요. 예약과 결제는 거기서 직접 해 주세요. 별나무는 날짜를 직접 골라야 해요.</div></div>';
+}
+
 // 관리자에게만, 아직 예약 완료가 아닌 날짜 카드 맨 아래에 붙는다
 function bookUi(d) {
   if (!ADMIN || d.status === "예약 완료") return "";
   var open = bookingOpenRow === d.row && bookForm;
-  return '<button class="bkbtn" data-book="' + d.row + '">' + (open ? "닫기" : "예약 완료 처리") + "</button>" +
+  return goBookUi(d) + '<button class="bkbtn" data-book="' + d.row + '">' + (open ? "닫기" : "예약 완료 처리") + "</button>" +
     (open ? '<div class="bkform" data-row="' + d.row + '">' +
       '<div class="checked" style="margin:0 0 8px">빈방 기준 ' + esc(DATA && DATA.checkedAt || "확인 전") +
       ". 오래됐으면 맨 위 '빈방 새로고침'을 먼저 눌러 주세요.</div>" + bookFormInner() + "</div>" : "");
